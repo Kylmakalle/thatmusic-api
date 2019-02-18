@@ -6,9 +6,9 @@ from tornado import web
 import aiohttp
 
 from cache import CachedHandler
-from settings import PATHS, HASH, DOWNLOAD_SETTINGS
+from settings import PATHS, HASH, DOWNLOAD_SETTINGS, SEARCH_SETTINGS
 
-from utils import uni_hash, sanitize, set_id3_tag
+from utils import uni_hash, sanitize, set_id3_tag, vk_url
 
 
 # TODO add S3 support
@@ -134,3 +134,63 @@ class StreamHandler(DownloadHandler):
     @web.addslash
     async def get(self, *args, **kwargs):
         await self.download(kwargs['key'], kwargs['id'], stream=True)
+
+
+class DownloadByIdHandler(DownloadHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+        self._cache_path = PATHS['mp3']
+        os.makedirs(self._cache_path, exist_ok=True)
+
+    @web.addslash
+    async def get(self, *args, **kwargs):
+        await self.download(kwargs['owner'], kwargs['id'], stream=False)
+
+    async def download(self, cache_key: str, audio_id: str, stream: bool = False):
+        file_path = self._build_file_path(audio_id)
+        if os.path.exists(file_path):
+            self.logger.debug('Audio file already exist: {}'.format(file_path))
+            audio_info = self._get_audio_info_cache(audio_id)
+            if audio_info is None:
+                audio_info = self._get_audio_info_from_cached_search(cache_key, audio_id)
+            if audio_info is None:
+                audio_name = '{}.mp3'.format(audio_id)
+            else:
+                audio_name = self._format_audio_name(audio_info)
+        else:
+            audio_info = await self._get_audio_info_by_id(cache_key, audio_id)
+            if audio_info is None:
+                raise web.HTTPError(404)
+            audio_name = self._format_audio_name(audio_info)
+
+            if not await self._download_audio(audio_info, file_path):
+                raise web.HTTPError(502)
+
+        if not await self._send_from_local_cache(file_path, audio_name, stream):
+            raise web.HTTPError(502)
+
+    async def _get_audio_info_by_id(self, owner, audio_id):
+        headers = {'User-Agent': SEARCH_SETTINGS['user_agent']}
+        params = {
+            'access_token': SEARCH_SETTINGS['access_token'],
+            'audios': '{}_{}'.format(owner, audio_id),
+            'v': '5.71'
+        }
+
+        self.logger.debug('Requesting audio ({}) from vk...'.format(params['audios']))
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                        url=vk_url('method/audio.getById'),
+                        headers=headers,
+                        params=params
+                ) as response:
+                    result = await response.json()
+            result = result['response'][0]
+            result['mp3'] = result['url']
+            result['id'] = str(result['id'])
+        except (KeyError, IndexError):
+            self.logger.warning('Malformed vk response for audio ({}) ...'.format(params['audios']))
+            raise web.HTTPError(502)
+        self._cache_audio_info(result)
+        return result

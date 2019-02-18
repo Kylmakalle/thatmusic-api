@@ -3,7 +3,7 @@ import logging
 
 from tornado.web import url, Application
 
-from download import DownloadHandler, StreamHandler
+from download import DownloadHandler, StreamHandler, DownloadByIdHandler
 from search import SearchHandler
 from utils import setup_logger
 
@@ -21,6 +21,7 @@ def main():
         handlers=[
             url(r'/search/?', SearchHandler, name='search'),
             url(r'/dl/(?P<key>[^\/]+)/(?P<id>[^\/]+)/?', DownloadHandler, name='download'),
+            url(r'/id/(?P<owner>[^\/]+)/(?P<id>[^\/]+)/?', DownloadByIdHandler, name='download_by_id'),
             url(r'/stream/(?P<key>[^\/]+)/(?P<id>[^\/]+)/?', StreamHandler, name='stream')
         ]
     )

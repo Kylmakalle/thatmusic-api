@@ -43,6 +43,8 @@ Search results are cached for 24 hours by default.
 
 `https://thatmusic.example/dl/{search_hash}/{audio_hash}` (downloads with proper file name `Artist - Title.mp3`)
 
+`https://thatmusic.example/id/{owner_id}/{audio_hash}` (downloads with proper file name `Artist - Title.mp3` using VK `owner` and `audio` id)
+
 `https://thatmusic.example/stream/{search_hash}/{audio_hash}` (streams file)
 
 # Cache
