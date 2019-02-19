@@ -25,7 +25,7 @@ CACHE_SETTINGS = {
 
 SEARCH_SETTINGS = {
     'access_token': os.environ['ACCESS_TOKEN'],
-    'user_agent': 'KateMobileAndroid/50.1 lite-438 (Android 7.0; SDK 24; arm64-v8a; HUAWEI HUAWEI CAN-L11; ru)',
+    'user_agent': 'KateMobileAndroid/52.1 lite-445 (Android 4.4.2; SDK 19; x86; unknown Android SDK built for x86; en)',
     'page_size': 50,
     'sort_regex': r'(?i)[ \[\],.:\)\(\-_](bass ?boost(ed)?|dub sound|remake|low bass'
                   r'|cover|(re)?mix|dj|bootleg|edit|aco?ustic|instrumental|karaoke'

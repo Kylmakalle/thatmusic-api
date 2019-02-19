@@ -54,8 +54,8 @@ class DownloadHandler(CachedHandler):
             with open(path, 'wb') as f:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(
-                        audio_info['mp3'],
-                        timeout=DOWNLOAD_SETTINGS['timeout']
+                            audio_info['mp3'],
+                            timeout=DOWNLOAD_SETTINGS['timeout']
                     ) as response:
                         async for chunk in response.content.iter_chunked(64 * 1024):
                             f.write(chunk)
@@ -146,7 +146,8 @@ class DownloadByIdHandler(DownloadHandler):
     async def get(self, *args, **kwargs):
         await self.download(kwargs['owner'], kwargs['id'], stream=False)
 
-    async def download(self, cache_key: str, audio_id: str, stream: bool = False):
+    async def download(self, cache_key: str, audio_id: str, token: str = SEARCH_SETTINGS['access_token'],
+                       stream: bool = False):
         file_path = self._build_file_path(audio_id)
         if os.path.exists(file_path):
             self.logger.debug('Audio file already exist: {}'.format(file_path))
@@ -158,7 +159,7 @@ class DownloadByIdHandler(DownloadHandler):
             else:
                 audio_name = self._format_audio_name(audio_info)
         else:
-            audio_info = await self._get_audio_info_by_id(cache_key, audio_id)
+            audio_info = await self._get_audio_info_by_id(cache_key, audio_id, token)
             if audio_info is None:
                 raise web.HTTPError(404)
             audio_name = self._format_audio_name(audio_info)
@@ -169,15 +170,16 @@ class DownloadByIdHandler(DownloadHandler):
         if not await self._send_from_local_cache(file_path, audio_name, stream):
             raise web.HTTPError(502)
 
-    async def _get_audio_info_by_id(self, owner, audio_id):
+    async def _get_audio_info_by_id(self, owner, audio_id, token):
         headers = {'User-Agent': SEARCH_SETTINGS['user_agent']}
         params = {
-            'access_token': SEARCH_SETTINGS['access_token'],
+            'access_token': token,
             'audios': '{}_{}'.format(owner, audio_id),
-            'v': '5.71'
+            'v': '5.78'
         }
 
         self.logger.debug('Requesting audio ({}) from vk...'.format(params['audios']))
+        log_result = None
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -186,11 +188,25 @@ class DownloadByIdHandler(DownloadHandler):
                         params=params
                 ) as response:
                     result = await response.json()
+            log_result = result
             result = result['response'][0]
             result['mp3'] = result['url']
             result['id'] = str(result['id'])
         except (KeyError, IndexError):
             self.logger.warning('Malformed vk response for audio ({}) ...'.format(params['audios']))
+            if log_result:
+                self.logger.warning('{}'.format(log_result))
             raise web.HTTPError(502)
         self._cache_audio_info(result)
         return result
+
+
+class DownloadByIdAccessHandler(DownloadByIdHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+        self._cache_path = PATHS['mp3']
+        os.makedirs(self._cache_path, exist_ok=True)
+
+    @web.addslash
+    async def get(self, *args, **kwargs):
+        await self.download(kwargs['owner'], kwargs['id'], token=kwargs['token'], stream=False)
