@@ -9,6 +9,7 @@ from cache import CachedHandler
 from settings import PATHS, HASH, DOWNLOAD_SETTINGS, SEARCH_SETTINGS
 
 from utils import uni_hash, sanitize, set_id3_tag, vk_url
+import uuid
 
 
 # TODO add S3 support
@@ -210,3 +211,32 @@ class DownloadByIdAccessHandler(DownloadByIdHandler):
     @web.addslash
     async def get(self, *args, **kwargs):
         await self.download(kwargs['owner'], kwargs['id'], token=kwargs['token'], stream=False)
+
+
+class DownloadByUrlHandler(DownloadHandler):
+    def __init__(self, application, request, **kwargs):
+        super().__init__(application, request, **kwargs)
+        self._cache_path = PATHS['mp3']
+        os.makedirs(self._cache_path, exist_ok=True)
+
+    @web.addslash
+    async def get(self, *args, **kwargs):
+        url = self.get_argument('url')
+        if not url:
+            raise web.HTTPError(404)
+        title = self.get_argument('title', '')
+        artist = self.get_argument('artist', '')
+        audio_info = {'mp3': url, 'title': title, 'artist': artist}
+        await self.download(audio_info, stream=False)
+
+    async def download(self, audio_info: dict, stream: bool):
+        file_path = self._build_file_path(str(uuid.uuid4().int))
+        if audio_info is None:
+            raise web.HTTPError(404)
+        audio_name = self._format_audio_name(audio_info)
+
+        if not await self._download_audio(audio_info, file_path):
+            raise web.HTTPError(502)
+
+        if not await self._send_from_local_cache(file_path, audio_name, stream):
+            raise web.HTTPError(502)
