@@ -21,8 +21,8 @@ def main():
         handlers=[
             url(r'/search/?', SearchHandler, name='search'),
             url(r'/dl/(?P<key>[^\/]+)/(?P<id>[^\/]+)/?', DownloadHandler, name='download'),
-            url(r'/access_id/(?P<token>[^\/]+)/(?P<owner>[^\/]+)/(?P<id>[^\/]+)/?', DownloadByIdAccessHandler,
-                name='download_by_id_token'),
+            url(r'/access_id/(?P<token>[^\/]+)/(?P<owner>[^\/]+)/(?P<id>[^\/]+)/(?P<access_key>[^\/]+)/?',
+                DownloadByIdAccessHandler, name='download_by_id_token'),
             url(r'/proxy/?', DownloadByUrlHandler, name='download_by_url'),
             url(r'/id/(?P<owner>[^\/]+)/(?P<id>[^\/]+)/?', DownloadByIdHandler, name='download_by_id'),
             url(r'/stream/(?P<key>[^\/]+)/(?P<id>[^\/]+)/?', StreamHandler, name='stream')

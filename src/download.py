@@ -10,6 +10,7 @@ from settings import PATHS, HASH, DOWNLOAD_SETTINGS, SEARCH_SETTINGS
 
 from utils import uni_hash, sanitize, set_id3_tag, vk_url
 import uuid
+from urllib.parse import unquote
 
 
 # TODO add S3 support
@@ -147,7 +148,8 @@ class DownloadByIdHandler(DownloadHandler):
     async def get(self, *args, **kwargs):
         await self.download(kwargs['owner'], kwargs['id'], stream=False)
 
-    async def download(self, cache_key: str, audio_id: str, token: str = SEARCH_SETTINGS['access_token'],
+    async def download(self, cache_key: str, audio_id: str, access_key: str = '',
+                       token: str = SEARCH_SETTINGS['access_token'],
                        stream: bool = False):
         file_path = self._build_file_path(audio_id)
         if os.path.exists(file_path):
@@ -160,7 +162,8 @@ class DownloadByIdHandler(DownloadHandler):
             else:
                 audio_name = self._format_audio_name(audio_info)
         else:
-            audio_info = await self._get_audio_info_by_id(cache_key, audio_id, token)
+            audio_info = await self._get_audio_info_by_id(cache_key, audio_id, token, access_key=access_key)
+
             if audio_info is None:
                 raise web.HTTPError(404)
             audio_name = self._format_audio_name(audio_info)
@@ -171,13 +174,15 @@ class DownloadByIdHandler(DownloadHandler):
         if not await self._send_from_local_cache(file_path, audio_name, stream):
             raise web.HTTPError(502)
 
-    async def _get_audio_info_by_id(self, owner, audio_id, token):
+    async def _get_audio_info_by_id(self, owner, audio_id, token, access_key=''):
         headers = {'User-Agent': SEARCH_SETTINGS['user_agent']}
         params = {
             'access_token': token,
             'audios': '{}_{}'.format(owner, audio_id),
             'v': '5.78'
         }
+        if access_key:
+            params['audios'] += '_{}'.format(access_key)
 
         self.logger.debug('Requesting audio ({}) from vk...'.format(params['audios']))
         log_result = None
@@ -191,6 +196,8 @@ class DownloadByIdHandler(DownloadHandler):
                     result = await response.json()
             log_result = result
             result = result['response'][0]
+            if int(result['owner_id']) == 100 or int(result['id']) == 1:
+                raise web.HTTPError(502)
             result['mp3'] = result['url']
             result['id'] = str(result['id'])
         except (KeyError, IndexError):
@@ -210,7 +217,8 @@ class DownloadByIdAccessHandler(DownloadByIdHandler):
 
     @web.addslash
     async def get(self, *args, **kwargs):
-        await self.download(kwargs['owner'], kwargs['id'], token=kwargs['token'], stream=False)
+        await self.download(kwargs['owner'], kwargs['id'], kwargs.get('access_key', ''), token=kwargs['token'],
+                            stream=False)
 
 
 class DownloadByUrlHandler(DownloadHandler):
